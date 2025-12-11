@@ -1,6 +1,8 @@
 import { useEffect, useState, useRef } from 'react'
 import { useRolePlayStore, Scenario, Persona } from '../../stores/rolePlayStore'
-import { Send, Play, User, Clock, Award, ArrowLeft } from 'lucide-react'
+import { Send, Play, User, Clock, Award, ArrowLeft, Sparkles, Bot } from 'lucide-react'
+import TokenUsageDisplay, { TokenNotification } from '../../components/TokenUsageDisplay'
+import { useTokenStore } from '../../stores/tokenStore'
 import clsx from 'clsx'
 
 type ViewState = 'select' | 'chat' | 'result'
@@ -12,11 +14,16 @@ export default function BCRolePlay() {
     currentSession, 
     sessions,
     isTyping,
+    useRealAI,
+    lastTokenUsage,
     loadData, 
     startSession, 
     sendMessage, 
-    endSession 
+    endSession,
+    toggleRealAI
   } = useRolePlayStore()
+  
+  const { resetSession } = useTokenStore()
   
   const [viewState, setViewState] = useState<ViewState>('select')
   const [selectedScenario, setSelectedScenario] = useState<Scenario | null>(null)
@@ -34,6 +41,7 @@ export default function BCRolePlay() {
   
   const handleStartSession = () => {
     if (selectedScenario && selectedPersona) {
+      resetSession() // Reset session token counter
       startSession(selectedScenario.id, selectedPersona.id)
       setViewState('chat')
     }
@@ -145,8 +153,37 @@ export default function BCRolePlay() {
           </div>
         </div>
         
-        {/* Start Button */}
-        <div className="flex justify-center">
+        {/* AI Mode Toggle & Start Button */}
+        <div className="flex flex-col items-center gap-4">
+          {/* AI Mode Toggle */}
+          <div className="flex items-center gap-4 bg-white rounded-xl px-6 py-3 shadow-sm">
+            <div className="flex items-center gap-2">
+              {useRealAI ? (
+                <Sparkles className="w-5 h-5 text-viking-gold" />
+              ) : (
+                <Bot className="w-5 h-5 text-gray-400" />
+              )}
+              <span className="font-medium text-viking-navy">
+                {useRealAI ? 'Real AI (GPT-4o-mini)' : 'Simulated AI'}
+              </span>
+            </div>
+            <button
+              onClick={toggleRealAI}
+              className={`relative w-12 h-6 rounded-full transition-colors ${
+                useRealAI ? 'bg-viking-gold' : 'bg-gray-300'
+              }`}
+            >
+              <span
+                className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-transform ${
+                  useRealAI ? 'left-7' : 'left-1'
+                }`}
+              />
+            </button>
+            {useRealAI && (
+              <span className="text-xs text-gray-500">~$0.0001/message</span>
+            )}
+          </div>
+          
           <button
             onClick={handleStartSession}
             disabled={!selectedScenario || !selectedPersona}
@@ -211,6 +248,12 @@ export default function BCRolePlay() {
             </div>
           </div>
           <div className="flex items-center gap-4">
+            {useRealAI && (
+              <div className="flex items-center gap-2 text-xs bg-viking-gold/10 text-viking-gold px-3 py-1 rounded-full">
+                <Sparkles className="w-3 h-3" />
+                <span>Real AI</span>
+              </div>
+            )}
             <div className="flex items-center gap-2 text-sm text-gray-500">
               <Clock className="w-4 h-4" />
               <span>{currentSession.messages.length} messages</span>
@@ -240,7 +283,7 @@ export default function BCRolePlay() {
             </div>
             
             {/* Messages */}
-            {currentSession.messages.map((message) => (
+            {currentSession.messages.map((message, index) => (
               <div
                 key={message.id}
                 className={clsx('flex gap-3', {
@@ -252,13 +295,19 @@ export default function BCRolePlay() {
                     {persona?.icon}
                   </div>
                 )}
-                <div
-                  className={clsx('max-w-[70%] rounded-2xl p-4', {
-                    'bg-white shadow-sm': message.role === 'guest',
-                    'bg-viking-blue text-white': message.role === 'agent',
-                  })}
-                >
-                  <p className="text-sm">{message.content}</p>
+                <div className="flex flex-col">
+                  <div
+                    className={clsx('max-w-[70%] rounded-2xl p-4', {
+                      'bg-white shadow-sm': message.role === 'guest',
+                      'bg-viking-blue text-white': message.role === 'agent',
+                    })}
+                  >
+                    <p className="text-sm">{message.content}</p>
+                  </div>
+                  {/* Show token usage for AI responses */}
+                  {message.role === 'guest' && useRealAI && index === currentSession.messages.length - 1 && lastTokenUsage && (
+                    <TokenNotification tokens={lastTokenUsage.tokens} cost={lastTokenUsage.cost} />
+                  )}
                 </div>
                 {message.role === 'agent' && (
                   <div className="w-10 h-10 rounded-full bg-viking-navy flex items-center justify-center text-white flex-shrink-0">
@@ -389,6 +438,11 @@ export default function BCRolePlay() {
             ))}
           </div>
         </div>
+        
+        {/* Token Usage Summary */}
+        {useRealAI && (
+          <TokenUsageDisplay showSession={true} />
+        )}
         
         {/* Actions */}
         <div className="flex gap-4 justify-center">

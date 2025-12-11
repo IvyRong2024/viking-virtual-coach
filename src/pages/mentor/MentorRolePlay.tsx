@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 import { useRolePlayStore } from '../../stores/rolePlayStore'
-import { MessageSquare, Users, TrendingUp, Clock, Play, Edit, Eye } from 'lucide-react'
+import { useTokenStore } from '../../stores/tokenStore'
+import { MessageSquare, Users, TrendingUp, Clock, Play, Edit, Eye, Coins } from 'lucide-react'
 import clsx from 'clsx'
 
 const recentSessions = [
@@ -32,6 +33,7 @@ const recentSessions = [
 
 export default function MentorRolePlay() {
   const { scenarios, loadData } = useRolePlayStore()
+  const { totalTokensUsed, totalCost, getFormattedCost } = useTokenStore()
   
   useEffect(() => {
     loadData()
@@ -101,6 +103,35 @@ export default function MentorRolePlay() {
           </div>
           <p className="text-2xl font-bold text-viking-navy">24</p>
           <p className="text-xs text-gray-500">of 30 total</p>
+        </div>
+      </div>
+      
+      {/* AI Token Usage Panel */}
+      <div className="bg-gradient-to-r from-viking-navy to-viking-blue rounded-xl p-6 shadow-lg text-white">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 rounded-xl bg-white/10 flex items-center justify-center">
+              <Coins className="w-6 h-6 text-viking-gold" />
+            </div>
+            <div>
+              <h3 className="font-semibold text-lg">AI API Usage</h3>
+              <p className="text-white/70 text-sm">Real-time token consumption tracking (gpt-4o-mini)</p>
+            </div>
+          </div>
+          <div className="flex gap-8">
+            <div className="text-center">
+              <p className="text-3xl font-bold">{totalTokensUsed.toLocaleString()}</p>
+              <p className="text-white/70 text-sm">Total Tokens</p>
+            </div>
+            <div className="text-center">
+              <p className="text-3xl font-bold text-viking-gold">{getFormattedCost(totalCost)}</p>
+              <p className="text-white/70 text-sm">Total Cost</p>
+            </div>
+            <div className="text-center">
+              <p className="text-3xl font-bold">$0.15</p>
+              <p className="text-white/70 text-sm">Per 1M Input</p>
+            </div>
+          </div>
         </div>
       </div>
       

@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { useTokenStore } from './tokenStore'
 
 export interface Persona {
   id: string
@@ -26,6 +27,10 @@ export interface Message {
   role: 'guest' | 'agent'
   content: string
   timestamp: Date
+  tokenUsage?: {
+    tokens: number
+    cost: number
+  }
   feedback?: {
     score: number
     strengths: string[]
@@ -56,12 +61,15 @@ interface RolePlayState {
   currentSession: RolePlaySession | null
   sessions: RolePlaySession[]
   isTyping: boolean
+  useRealAI: boolean
+  lastTokenUsage: { tokens: number; cost: number } | null
   
   loadData: () => void
   startSession: (scenarioId: string, personaId: string) => void
   sendMessage: (content: string) => Promise<void>
   endSession: () => void
   getAIResponse: (userMessage: string) => Promise<string>
+  toggleRealAI: () => void
 }
 
 const samplePersonas: Persona[] = [
@@ -339,6 +347,12 @@ export const useRolePlayStore = create<RolePlayState>((set, get) => ({
   currentSession: null,
   sessions: [],
   isTyping: false,
+  useRealAI: true, // Default to real AI
+  lastTokenUsage: null,
+  
+  toggleRealAI: () => {
+    set(state => ({ useRealAI: !state.useRealAI }))
+  },
   
   loadData: () => {
     set({ personas: samplePersonas, scenarios: sampleScenarios })
@@ -408,13 +422,66 @@ export const useRolePlayStore = create<RolePlayState>((set, get) => ({
   },
   
   getAIResponse: async (userMessage: string): Promise<string> => {
-    const { currentSession, scenarios } = get()
+    const { currentSession, scenarios, useRealAI } = get()
     if (!currentSession) return "..."
     
-    // Simulate API delay
-    await new Promise(resolve => setTimeout(resolve, 1000 + Math.random() * 1000))
-    
     const scenario = scenarios.find(s => s.id === currentSession.scenarioId)
+    
+    // Try real AI first if enabled
+    if (useRealAI) {
+      try {
+        // Build conversation history for context
+        const conversationHistory = currentSession.messages.map(msg => ({
+          role: msg.role === 'guest' ? 'assistant' : 'user' as const,
+          content: msg.content,
+        }))
+        
+        // Add the new user message
+        conversationHistory.push({ role: 'user' as const, content: userMessage })
+        
+        const response = await fetch('/api/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            messages: conversationHistory,
+            persona: currentSession.personaId,
+            scenario: scenario?.title || 'General customer service',
+          }),
+        })
+        
+        if (response.ok) {
+          const data = await response.json()
+          
+          // Track token usage
+          if (data.usage) {
+            const tokenUsage = {
+              tokens: data.usage.total_tokens,
+              cost: data.usage.estimated_cost,
+            }
+            set({ lastTokenUsage: tokenUsage })
+            
+            // Add to global token tracking
+            useTokenStore.getState().addUsage({
+              promptTokens: data.usage.prompt_tokens,
+              completionTokens: data.usage.completion_tokens,
+              totalTokens: data.usage.total_tokens,
+              cost: data.usage.estimated_cost,
+              scenario: scenario?.title,
+            })
+          }
+          
+          return data.content
+        }
+        
+        // If API fails, fall back to simulation
+        console.warn('API failed, falling back to simulation')
+      } catch (error) {
+        console.warn('API error, falling back to simulation:', error)
+      }
+    }
+    
+    // Fallback: Simulated response
+    await new Promise(resolve => setTimeout(resolve, 1000 + Math.random() * 1000))
     
     // Analyze user response quality
     const quality = analyzeResponse(userMessage)
