@@ -1,0 +1,123 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --viking-red: #D4145A;
+  --viking-blue: #00518F;
+  --viking-gold: #C5A572;
+  --viking-navy: #1A2B4A;
+}
+
+body {
+  @apply bg-viking-light text-viking-navy antialiased;
+  font-family: 'Inter', system-ui, sans-serif;
+}
+
+.font-display {
+  font-family: 'Playfair Display', serif;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  @apply bg-gray-100 rounded-full;
+}
+
+::-webkit-scrollbar-thumb {
+  @apply bg-gray-300 rounded-full hover:bg-gray-400;
+}
+
+/* Animations */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes slideIn {
+  from { opacity: 0; transform: translateX(-20px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes pulse-slow {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+
+.animate-fadeIn {
+  animation: fadeIn 0.3s ease-out;
+}
+
+.animate-slideIn {
+  animation: slideIn 0.3s ease-out;
+}
+
+.animate-pulse-slow {
+  animation: pulse-slow 2s ease-in-out infinite;
+}
+
+/* Card hover effects */
+.card-hover {
+  @apply transition-all duration-300 ease-out;
+}
+
+.card-hover:hover {
+  @apply -translate-y-1 shadow-lg;
+}
+
+/* Gradient backgrounds */
+.bg-gradient-viking {
+  background: linear-gradient(135deg, var(--viking-navy) 0%, var(--viking-blue) 100%);
+}
+
+.bg-gradient-gold {
+  background: linear-gradient(135deg, var(--viking-gold) 0%, #E8D5B0 100%);
+}
+
+/* Glass effect */
+.glass {
+  @apply bg-white/80 backdrop-blur-md;
+}
+
+/* Badge styles */
+.badge {
+  @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium;
+}
+
+.badge-easy {
+  @apply bg-green-100 text-green-800;
+}
+
+.badge-medium {
+  @apply bg-yellow-100 text-yellow-800;
+}
+
+.badge-hard {
+  @apply bg-red-100 text-red-800;
+}
+
+/* Button base styles */
+.btn {
+  @apply inline-flex items-center justify-center px-4 py-2 rounded-lg font-medium transition-all duration-200;
+}
+
+.btn-primary {
+  @apply bg-viking-red text-white hover:bg-opacity-90 active:scale-95;
+}
+
+.btn-secondary {
+  @apply bg-viking-navy text-white hover:bg-opacity-90 active:scale-95;
+}
+
+.btn-outline {
+  @apply border-2 border-viking-navy text-viking-navy hover:bg-viking-navy hover:text-white;
+}
+
+.btn-ghost {
+  @apply text-viking-navy hover:bg-viking-navy/10;
+}
+
