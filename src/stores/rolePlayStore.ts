@@ -200,23 +200,137 @@ const sampleScenarios: Scenario[] = [
   },
 ]
 
-// AI response simulation
-const aiResponses: Record<string, string[]> = {
-  curious_explorer: [
-    "That's really helpful! Can you tell me more about the shore excursions?",
-    "Interesting! What about the dining options on board?",
-    "I see! And how does the cultural program work?",
-  ],
-  value_seeker: [
-    "Okay, but break it down for me. What's the actual dollar value?",
-    "I'm still not convinced. Other cruise lines include similar things.",
-    "Hmm, that's a fair point. What else should I consider?",
-  ],
-  dissatisfied_customer: [
-    "That's not good enough! I expected better from Viking!",
-    "Well... I suppose that's something. But I'm still not happy.",
-    "Fine. But this better not happen again.",
-  ],
+// AI response simulation based on user input quality
+const aiResponses: Record<string, { good: string[]; weak: string[]; confused: string[] }> = {
+  curious_explorer: {
+    good: [
+      "That's really helpful! Can you tell me more about the shore excursions?",
+      "Interesting! What about the dining options on board?",
+      "I see! And how does the cultural program work?",
+    ],
+    weak: [
+      "Hmm, I was hoping for more details. Can you explain that better?",
+      "I'm not sure I understand. Could you be more specific?",
+      "That doesn't really answer my question...",
+    ],
+    confused: [
+      "I'm sorry, I don't quite follow. What do you mean?",
+      "Could you clarify that for me?",
+      "I'm a bit confused by your response.",
+    ],
+  },
+  value_seeker: {
+    good: [
+      "Okay, that makes more sense now. What else is included?",
+      "Hmm, that's a fair point. What else should I consider?",
+      "I see the value now. Tell me more about the cabins.",
+    ],
+    weak: [
+      "That's not very convincing. I need real numbers!",
+      "Other cruise lines give me concrete comparisons. Can you?",
+      "I'm still not seeing why I should pay more.",
+    ],
+    confused: [
+      "What? That doesn't make sense. Are you new here?",
+      "I asked about pricing and you're not answering my question.",
+      "Can I speak to someone who knows the products better?",
+    ],
+  },
+  anxious_planner: {
+    good: [
+      "Oh, that makes me feel better! What about...?",
+      "Thank you for explaining that. I have another concern though...",
+      "Okay, that's reassuring. And the safety measures?",
+    ],
+    weak: [
+      "That doesn't really help my concerns...",
+      "I'm still worried. Can you give me more details?",
+      "I need more reassurance than that.",
+    ],
+    confused: [
+      "I don't understand. Now I'm even more worried!",
+      "That's confusing. Can you explain it more clearly?",
+      "I'm not sure what you mean...",
+    ],
+  },
+  strict_impatient: {
+    good: [
+      "Finally, a straight answer. What else?",
+      "Okay, that works. Now what about the timeline?",
+      "Good. Let's move on.",
+    ],
+    weak: [
+      "That's not what I asked. Can you stay focused?",
+      "I don't have time for vague answers!",
+      "Get to the point! What's the actual solution?",
+    ],
+    confused: [
+      "What are you even talking about?",
+      "Is this your first day? I need someone competent!",
+      "This is a waste of my time!",
+    ],
+  },
+  dissatisfied_customer: {
+    good: [
+      "Well... I suppose that's something. But I'm still not happy.",
+      "Okay, that helps a little. What else can you do?",
+      "Fine. At least you're trying to help.",
+    ],
+    weak: [
+      "That's not good enough! I expected better from Viking!",
+      "Are you even listening to me? I want a REAL solution!",
+      "This is ridiculous! I'm posting about this online!",
+    ],
+    confused: [
+      "What?! That makes no sense! Let me speak to your manager!",
+      "I can't believe this is your response!",
+      "You clearly don't understand my problem at all!",
+    ],
+  },
+}
+
+// Analyze user message quality
+const analyzeResponse = (message: string): 'good' | 'weak' | 'confused' => {
+  const lowMsg = message.toLowerCase().trim()
+  
+  // Confused/bad responses
+  if (lowMsg.length < 10 || 
+      lowMsg.includes("don't know") || 
+      lowMsg.includes("dont know") ||
+      lowMsg.includes("不知道") ||
+      lowMsg === "so?" ||
+      lowMsg === "ok" ||
+      lowMsg === "okay" ||
+      lowMsg === "um" ||
+      lowMsg === "uh" ||
+      lowMsg === "..." ||
+      lowMsg === "?" ||
+      /^(what|huh|eh|idk|no idea)/i.test(lowMsg)) {
+    return 'confused'
+  }
+  
+  // Weak responses (short, no substance)
+  if (lowMsg.length < 30 && 
+      !lowMsg.includes("sorry") && 
+      !lowMsg.includes("understand") &&
+      !lowMsg.includes("help")) {
+    return 'weak'
+  }
+  
+  // Good responses (has empathy, substance, or solutions)
+  if (lowMsg.includes("understand") ||
+      lowMsg.includes("sorry") ||
+      lowMsg.includes("help") ||
+      lowMsg.includes("offer") ||
+      lowMsg.includes("include") ||
+      lowMsg.includes("value") ||
+      lowMsg.includes("option") ||
+      lowMsg.includes("let me") ||
+      lowMsg.length > 50) {
+    return 'good'
+  }
+  
+  return 'weak'
 }
 
 export const useRolePlayStore = create<RolePlayState>((set, get) => ({
@@ -294,37 +408,34 @@ export const useRolePlayStore = create<RolePlayState>((set, get) => ({
   },
   
   getAIResponse: async (userMessage: string): Promise<string> => {
-    const { currentSession, personas, scenarios } = get()
+    const { currentSession, scenarios } = get()
     if (!currentSession) return "..."
     
     // Simulate API delay
     await new Promise(resolve => setTimeout(resolve, 1000 + Math.random() * 1000))
     
-    const persona = personas.find(p => p.id === currentSession.personaId)
     const scenario = scenarios.find(s => s.id === currentSession.scenarioId)
     
-    // Check for trigger events
-    if (scenario && currentSession.messages.length < 6) {
+    // Analyze user response quality
+    const quality = analyzeResponse(userMessage)
+    
+    // Get persona-specific responses based on quality
+    const personaId = currentSession.personaId as keyof typeof aiResponses
+    const personaResponses = aiResponses[personaId] || aiResponses.curious_explorer
+    const responses = personaResponses[quality]
+    
+    // Check for trigger events on weak/confused responses
+    if (scenario && quality !== 'good' && currentSession.messages.length < 8) {
       const triggerChance = Math.random()
-      if (triggerChance > 0.5 && scenario.triggerEvents.length > 0) {
+      if (triggerChance > 0.4 && scenario.triggerEvents.length > 0) {
         const triggerIndex = Math.floor(Math.random() * scenario.triggerEvents.length)
         return scenario.triggerEvents[triggerIndex]
       }
     }
     
-    // Use persona-specific responses
-    const personaResponses = aiResponses[currentSession.personaId] || aiResponses.curious_explorer
-    const responseIndex = Math.floor(Math.random() * personaResponses.length)
-    
-    // Add some intelligence based on user message
-    if (userMessage.toLowerCase().includes('sorry') || userMessage.toLowerCase().includes('understand')) {
-      if (persona?.difficulty === 'hard') {
-        return "Well... I appreciate that. But what are you going to do about it?"
-      }
-      return "Thank you for understanding. That helps."
-    }
-    
-    return personaResponses[responseIndex]
+    // Return appropriate response based on quality
+    const responseIndex = Math.floor(Math.random() * responses.length)
+    return responses[responseIndex]
   },
   
   endSession: () => {
