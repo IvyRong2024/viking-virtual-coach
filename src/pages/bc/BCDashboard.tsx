@@ -6,12 +6,9 @@ import {
   Target, 
   MessageSquare, 
   BookOpen, 
-  TrendingUp,
-  Award,
   Flame,
   ChevronRight,
-  CheckCircle,
-  Clock
+  CheckCircle
 } from 'lucide-react'
 import { RadarChart, PolarGrid, PolarAngleAxis, Radar, ResponsiveContainer } from 'recharts'
 

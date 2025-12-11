@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from 'react'
 import { useRolePlayStore, Scenario, Persona } from '../../stores/rolePlayStore'
-import { MessageSquare, Send, X, Play, User, Bot, Clock, Award, ArrowLeft } from 'lucide-react'
+import { Send, Play, User, Clock, Award, ArrowLeft } from 'lucide-react'
 import clsx from 'clsx'
 
 type ViewState = 'select' | 'chat' | 'result'

@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
 import { useSkillStore } from '../../stores/skillStore'
-import { TrendingUp, Award, Target, ChevronUp } from 'lucide-react'
+import { ChevronUp } from 'lucide-react'
 import { RadarChart, PolarGrid, PolarAngleAxis, Radar, ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts'
 import clsx from 'clsx'
 

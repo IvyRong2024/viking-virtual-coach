@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
-import { useQuizStore, QuizQuestion, QuizAttempt } from '../../stores/quizStore'
-import { Target, Clock, CheckCircle, XCircle, ArrowRight, RotateCcw, Trophy } from 'lucide-react'
+import { useQuizStore, QuizAttempt } from '../../stores/quizStore'
+import { Clock, CheckCircle, XCircle, ArrowRight, RotateCcw, Trophy } from 'lucide-react'
 import clsx from 'clsx'
 
 type QuizState = 'select' | 'playing' | 'result'

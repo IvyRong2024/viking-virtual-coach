@@ -31,7 +31,7 @@ const recentSessions = [
 ]
 
 export default function MentorRolePlay() {
-  const { scenarios, personas, loadData } = useRolePlayStore()
+  const { scenarios, loadData } = useRolePlayStore()
   
   useEffect(() => {
     loadData()

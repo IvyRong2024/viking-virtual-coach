@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Search, Filter, ChevronDown, TrendingUp, Target, MessageSquare, Award } from 'lucide-react'
+import { Search, TrendingUp, Target, MessageSquare, Award } from 'lucide-react'
 import { RadarChart, PolarGrid, PolarAngleAxis, Radar, ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts'
 
 const agents = [
