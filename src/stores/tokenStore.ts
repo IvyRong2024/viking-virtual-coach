@@ -24,7 +24,7 @@ interface TokenState {
 
 export const useTokenStore = create<TokenState>()(
   persist(
-    (set, get) => ({
+    (set) => ({
       totalTokensUsed: 0,
       totalCost: 0,
       sessionTokens: 0,
