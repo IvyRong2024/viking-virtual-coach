@@ -1,6 +1,12 @@
 // Vercel Serverless Function for OpenAI Chat
 // Uses gpt-4o-mini - the cheapest and most efficient model
 
+declare const process: {
+  env: {
+    AI_API_KEY?: string;
+  };
+};
+
 export const config = {
   runtime: 'edge',
 };
