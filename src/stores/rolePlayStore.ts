@@ -63,6 +63,8 @@ interface RolePlayState {
   isTyping: boolean
   useRealAI: boolean
   lastTokenUsage: { tokens: number; cost: number } | null
+  apiStatus: 'idle' | 'success' | 'error' | 'fallback'
+  apiError: string | null
   
   loadData: () => void
   startSession: (scenarioId: string, personaId: string) => void
@@ -297,7 +299,143 @@ const aiResponses: Record<string, { good: string[]; weak: string[]; confused: st
   },
 }
 
-// Analyze user message quality
+// Detailed message scoring system
+interface MessageScore {
+  empathy: number
+  clarity: number
+  accuracy: number
+  solution: number
+  professionalism: number
+  penalties: string[]
+}
+
+const scoreMessage = (message: string): MessageScore => {
+  const lowMsg = message.toLowerCase().trim()
+  const score: MessageScore = {
+    empathy: 0,
+    clarity: 0,
+    accuracy: 0,
+    solution: 0,
+    professionalism: 0,
+    penalties: [],
+  }
+  
+  // === CRITICAL PENALTIES (Immediate low scores) ===
+  
+  // Extremely short or nonsense responses
+  if (lowMsg.length < 5) {
+    score.penalties.push('Response too short (< 5 chars)')
+    return { empathy: 5, clarity: 5, accuracy: 5, solution: 5, professionalism: 5, penalties: score.penalties }
+  }
+  
+  // Rude or inappropriate
+  const rudePatterns = /\b(shut up|stupid|dumb|idiot|whatever|don'?t care|不管|随便|关你|滚|傻|蠢)\b/i
+  if (rudePatterns.test(lowMsg)) {
+    score.penalties.push('Rude or inappropriate language')
+    return { empathy: 0, clarity: 10, accuracy: 10, solution: 0, professionalism: 0, penalties: score.penalties }
+  }
+  
+  // Dismissive responses
+  const dismissivePatterns = /^(ok|okay|fine|sure|whatever|idk|no|yes|nope|yep|k|好|行|嗯|哦|呵呵|。|\.{1,3}|\?+|!+)$/i
+  if (dismissivePatterns.test(lowMsg)) {
+    score.penalties.push('Dismissive one-word response')
+    return { empathy: 10, clarity: 15, accuracy: 10, solution: 5, professionalism: 15, penalties: score.penalties }
+  }
+  
+  // "I don't know" type responses
+  if (/\b(don'?t know|no idea|idk|不知道|没办法|不清楚)\b/i.test(lowMsg)) {
+    score.penalties.push('Expressed inability to help')
+    score.solution = 10
+    score.accuracy = 15
+  }
+  
+  // Irrelevant/off-topic (gibberish detection)
+  const words = lowMsg.split(/\s+/)
+  const avgWordLength = words.reduce((sum, w) => sum + w.length, 0) / words.length
+  if (avgWordLength > 15 || /(.)\1{4,}/.test(lowMsg)) {
+    score.penalties.push('Gibberish or spam detected')
+    return { empathy: 5, clarity: 5, accuracy: 5, solution: 5, professionalism: 5, penalties: score.penalties }
+  }
+  
+  // === POSITIVE SCORING ===
+  
+  // EMPATHY (0-100)
+  const empathyPhrases = [
+    'understand', 'sorry', 'apologize', 'appreciate', 'frustrating', 
+    'hear you', 'feel', 'concern', 'important to you', 'I can see',
+    '理解', '抱歉', '感谢', '体谅'
+  ]
+  const empathyCount = empathyPhrases.filter(p => lowMsg.includes(p)).length
+  score.empathy = Math.min(100, empathyCount * 25 + (lowMsg.length > 50 ? 15 : 0))
+  
+  // CLARITY (0-100) - Based on structure and length
+  if (lowMsg.length >= 100) score.clarity += 40
+  else if (lowMsg.length >= 50) score.clarity += 25
+  else if (lowMsg.length >= 20) score.clarity += 15
+  else score.clarity += 5
+  
+  // Has structure (multiple sentences)
+  const sentences = message.split(/[.!?。！？]/).filter(s => s.trim().length > 0)
+  score.clarity += Math.min(30, sentences.length * 10)
+  
+  // Uses proper punctuation
+  if (/[.!?。！？]/.test(message)) score.clarity += 15
+  
+  // Uses connecting words
+  if (/\b(first|second|also|additionally|because|therefore|however|首先|其次|另外|因为|所以)\b/i.test(lowMsg)) {
+    score.clarity += 15
+  }
+  
+  // ACCURACY (0-100) - Viking-specific knowledge
+  const vikingTerms = [
+    'viking', 'cruise', 'ship', 'cabin', 'excursion', 'inclusive', 'included',
+    'veranda', 'explorer', 'suite', 'dining', 'restaurant', 'destination',
+    'itinerary', 'port', 'shore', 'onboard', 'stateroom', 'enrichment',
+    '维京', '邮轮', '舱房', '岸上游', '包含', '目的地'
+  ]
+  const accuracyCount = vikingTerms.filter(t => lowMsg.includes(t)).length
+  score.accuracy = Math.min(100, accuracyCount * 15 + 20)
+  
+  // SOLUTION (0-100) - Problem-solving orientation
+  const solutionPhrases = [
+    'let me', 'I can', 'we can', 'offer', 'option', 'alternative', 'help you',
+    'arrange', 'provide', 'recommend', 'suggest', 'would you like', 'available',
+    'upgrade', 'compensation', 'refund', 'credit', 'complimentary',
+    '我可以', '我们可以', '帮您', '提供', '建议', '推荐', '选择', '方案'
+  ]
+  const solutionCount = solutionPhrases.filter(p => lowMsg.includes(p)).length
+  score.solution = Math.min(100, solutionCount * 20 + (lowMsg.includes('?') ? 10 : 0))
+  
+  // PROFESSIONALISM (0-100)
+  score.professionalism = 50 // Base score
+  
+  // Polite language bonus
+  if (/\b(please|thank|welcome|pleasure|happy to|glad to|请|谢谢|欢迎|很高兴)\b/i.test(lowMsg)) {
+    score.professionalism += 25
+  }
+  
+  // Proper greeting/closing
+  if (/\b(hello|hi|good morning|good afternoon|dear|best regards|您好|你好)\b/i.test(lowMsg)) {
+    score.professionalism += 15
+  }
+  
+  // Uses customer's perspective
+  if (/\b(you|your|you're|您|你的)\b/i.test(lowMsg)) {
+    score.professionalism += 10
+  }
+  
+  // === LENGTH PENALTIES ===
+  if (lowMsg.length < 20) {
+    score.penalties.push('Response too brief')
+    score.empathy = Math.min(score.empathy, 30)
+    score.solution = Math.min(score.solution, 25)
+    score.clarity = Math.min(score.clarity, 35)
+  }
+  
+  return score
+}
+
+// Analyze user message quality for AI response selection
 const analyzeResponse = (message: string): 'good' | 'weak' | 'confused' => {
   const lowMsg = message.toLowerCase().trim()
   
@@ -341,6 +479,96 @@ const analyzeResponse = (message: string): 'good' | 'weak' | 'confused' => {
   return 'weak'
 }
 
+// Calculate final session score
+const calculateSessionScore = (messages: Message[]): {
+  totalScore: number
+  dimensions: Record<string, number>
+  strengths: string[]
+  improvements: string[]
+  recommendations: string[]
+} => {
+  // Get only agent messages
+  const agentMessages = messages.filter(m => m.role === 'agent')
+  
+  if (agentMessages.length === 0) {
+    return {
+      totalScore: 0,
+      dimensions: { empathy: 0, clarity: 0, accuracy: 0, solution: 0, deescalation: 0, brand: 0 },
+      strengths: [],
+      improvements: ['No responses were provided'],
+      recommendations: ['Complete the role play exercise'],
+    }
+  }
+  
+  // Score each message
+  const allScores = agentMessages.map(m => scoreMessage(m.content))
+  const allPenalties = allScores.flatMap(s => s.penalties)
+  
+  // Calculate averages for each dimension
+  const avgScore = (dimension: keyof Omit<MessageScore, 'penalties'>) => {
+    const sum = allScores.reduce((acc, s) => acc + s[dimension], 0)
+    return Math.round(sum / allScores.length)
+  }
+  
+  const dimensions = {
+    empathy: avgScore('empathy'),
+    clarity: avgScore('clarity'),
+    accuracy: avgScore('accuracy'),
+    solution: avgScore('solution'),
+    deescalation: Math.round((avgScore('empathy') + avgScore('professionalism')) / 2),
+    brand: avgScore('professionalism'),
+  }
+  
+  // Calculate total score (weighted average)
+  const weights = { empathy: 0.2, clarity: 0.15, accuracy: 0.2, solution: 0.25, deescalation: 0.1, brand: 0.1 }
+  let totalScore = Object.entries(dimensions).reduce((sum, [key, value]) => {
+    return sum + value * (weights[key as keyof typeof weights] || 0.1)
+  }, 0)
+  
+  // Apply global penalties
+  if (allPenalties.length > 0) {
+    const uniquePenalties = [...new Set(allPenalties)]
+    totalScore = Math.max(0, totalScore - uniquePenalties.length * 10)
+  }
+  
+  // Penalty for too few messages (didn't engage enough)
+  if (agentMessages.length < 3) {
+    totalScore = Math.min(totalScore, 50)
+  }
+  
+  totalScore = Math.round(Math.max(0, Math.min(100, totalScore)))
+  
+  // Generate strengths
+  const strengths: string[] = []
+  if (dimensions.empathy >= 70) strengths.push('Good use of empathy and understanding')
+  if (dimensions.clarity >= 70) strengths.push('Clear and well-structured responses')
+  if (dimensions.accuracy >= 70) strengths.push('Accurate product knowledge demonstrated')
+  if (dimensions.solution >= 70) strengths.push('Proactive problem-solving approach')
+  if (dimensions.brand >= 70) strengths.push('Professional and brand-aligned communication')
+  if (strengths.length === 0) strengths.push('Completed the role play exercise')
+  
+  // Generate improvements
+  const improvements: string[] = []
+  if (dimensions.empathy < 50) improvements.push('Use more empathy phrases (e.g., "I understand", "I apologize")')
+  if (dimensions.clarity < 50) improvements.push('Provide longer, more detailed responses')
+  if (dimensions.accuracy < 50) improvements.push('Include more Viking-specific information')
+  if (dimensions.solution < 50) improvements.push('Offer concrete solutions and alternatives')
+  if (dimensions.brand < 50) improvements.push('Use more professional and polite language')
+  if (allPenalties.includes('Response too brief')) improvements.push('Avoid one-word or very short answers')
+  if (allPenalties.includes('Dismissive one-word response')) improvements.push('Engage meaningfully with customer concerns')
+  if (improvements.length === 0) improvements.push('Continue practicing to maintain consistency')
+  
+  // Generate recommendations
+  const recommendations: string[] = []
+  if (dimensions.empathy < 60) recommendations.push('LEAP Model Training')
+  if (dimensions.accuracy < 60) recommendations.push('Viking Product Knowledge Course')
+  if (dimensions.solution < 60) recommendations.push('Problem Resolution Workshop')
+  if (dimensions.brand < 60) recommendations.push('Brand Voice Guidelines Review')
+  if (recommendations.length === 0) recommendations.push('Advanced Customer Engagement')
+  
+  return { totalScore, dimensions, strengths, improvements, recommendations }
+}
+
 export const useRolePlayStore = create<RolePlayState>((set, get) => ({
   personas: [],
   scenarios: [],
@@ -349,9 +577,11 @@ export const useRolePlayStore = create<RolePlayState>((set, get) => ({
   isTyping: false,
   useRealAI: true, // Default to real AI
   lastTokenUsage: null,
+  apiStatus: 'idle',
+  apiError: null,
   
   toggleRealAI: () => {
-    set(state => ({ useRealAI: !state.useRealAI }))
+    set(state => ({ useRealAI: !state.useRealAI, apiStatus: 'idle', apiError: null }))
   },
   
   loadData: () => {
@@ -439,6 +669,8 @@ export const useRolePlayStore = create<RolePlayState>((set, get) => ({
         // Add the new user message
         conversationHistory.push({ role: 'user' as const, content: userMessage })
         
+        console.log('[AI] Calling API with', conversationHistory.length, 'messages')
+        
         const response = await fetch('/api/chat', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -451,32 +683,48 @@ export const useRolePlayStore = create<RolePlayState>((set, get) => ({
         
         if (response.ok) {
           const data = await response.json()
+          console.log('[AI] API response:', data)
           
-          // Track token usage
-          if (data.usage) {
-            const tokenUsage = {
-              tokens: data.usage.total_tokens,
-              cost: data.usage.estimated_cost,
+          // Check if there's an error in the response
+          if (data.error) {
+            console.error('[AI] API returned error:', data.error)
+            set({ apiStatus: 'error', apiError: data.error })
+            // Fall through to simulation
+          } else {
+            // Track token usage
+            if (data.usage) {
+              const tokenUsage = {
+                tokens: data.usage.total_tokens,
+                cost: data.usage.estimated_cost,
+              }
+              set({ lastTokenUsage: tokenUsage, apiStatus: 'success', apiError: null })
+              
+              // Add to global token tracking
+              useTokenStore.getState().addUsage({
+                promptTokens: data.usage.prompt_tokens,
+                completionTokens: data.usage.completion_tokens,
+                totalTokens: data.usage.total_tokens,
+                cost: data.usage.estimated_cost,
+                scenario: scenario?.title,
+              })
+              
+              console.log('[AI] Tokens used:', data.usage.total_tokens, 'Cost:', data.usage.estimated_cost)
             }
-            set({ lastTokenUsage: tokenUsage })
             
-            // Add to global token tracking
-            useTokenStore.getState().addUsage({
-              promptTokens: data.usage.prompt_tokens,
-              completionTokens: data.usage.completion_tokens,
-              totalTokens: data.usage.total_tokens,
-              cost: data.usage.estimated_cost,
-              scenario: scenario?.title,
-            })
+            return data.content
           }
-          
-          return data.content
+        } else {
+          const errorText = await response.text()
+          console.error('[AI] API HTTP error:', response.status, errorText)
+          set({ apiStatus: 'error', apiError: `HTTP ${response.status}: ${errorText}` })
         }
         
         // If API fails, fall back to simulation
-        console.warn('API failed, falling back to simulation')
+        console.warn('[AI] Falling back to simulation mode')
+        set({ apiStatus: 'fallback' })
       } catch (error) {
-        console.warn('API error, falling back to simulation:', error)
+        console.error('[AI] API exception:', error)
+        set({ apiStatus: 'error', apiError: String(error) })
       }
     }
     
@@ -509,31 +757,8 @@ export const useRolePlayStore = create<RolePlayState>((set, get) => ({
     const { currentSession, sessions } = get()
     if (!currentSession) return
     
-    // Generate feedback
-    const feedback = {
-      totalScore: Math.floor(Math.random() * 30) + 70,
-      dimensions: {
-        empathy: Math.floor(Math.random() * 20) + 75,
-        clarity: Math.floor(Math.random() * 20) + 70,
-        accuracy: Math.floor(Math.random() * 15) + 80,
-        solution: Math.floor(Math.random() * 25) + 65,
-        deescalation: Math.floor(Math.random() * 20) + 70,
-        brand: Math.floor(Math.random() * 15) + 80,
-      },
-      strengths: [
-        'Good use of empathy phrases',
-        'Clear communication structure',
-        'Appropriate solution offered',
-      ],
-      improvements: [
-        'Could explore customer needs more deeply',
-        'Consider offering multiple alternatives',
-      ],
-      recommendations: [
-        'Value Framing Module',
-        'LEAP Model Practice',
-      ],
-    }
+    // Calculate real score based on message content analysis
+    const feedback = calculateSessionScore(currentSession.messages)
     
     const completedSession: RolePlaySession = {
       ...currentSession,

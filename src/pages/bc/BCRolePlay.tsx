@@ -16,6 +16,8 @@ export default function BCRolePlay() {
     isTyping,
     useRealAI,
     lastTokenUsage,
+    apiStatus,
+    apiError,
     loadData, 
     startSession, 
     sendMessage, 
@@ -249,9 +251,24 @@ export default function BCRolePlay() {
           </div>
           <div className="flex items-center gap-4">
             {useRealAI && (
-              <div className="flex items-center gap-2 text-xs bg-viking-gold/10 text-viking-gold px-3 py-1 rounded-full">
+              <div className={`flex items-center gap-2 text-xs px-3 py-1 rounded-full ${
+                apiStatus === 'success' ? 'bg-green-100 text-green-700' :
+                apiStatus === 'error' ? 'bg-red-100 text-red-700' :
+                apiStatus === 'fallback' ? 'bg-yellow-100 text-yellow-700' :
+                'bg-viking-gold/10 text-viking-gold'
+              }`}>
                 <Sparkles className="w-3 h-3" />
-                <span>Real AI</span>
+                <span>
+                  {apiStatus === 'success' ? 'AI Connected ✓' :
+                   apiStatus === 'error' ? 'AI Error ✗' :
+                   apiStatus === 'fallback' ? 'Simulated' :
+                   'Real AI'}
+                </span>
+              </div>
+            )}
+            {apiError && (
+              <div className="text-xs text-red-500 max-w-[200px] truncate" title={apiError}>
+                {apiError}
               </div>
             )}
             <div className="flex items-center gap-2 text-sm text-gray-500">
