@@ -1,14 +1,14 @@
 // Vercel Serverless Function for OpenAI Chat
 // Uses gpt-4o-mini - the cheapest and most efficient model
 
-declare const process: {
-  env: {
-    AI_API_KEY?: string;
-  };
-};
-
 export const config = {
   runtime: 'edge',
+};
+
+// Access environment variable in Edge Runtime
+const getApiKey = (): string | undefined => {
+  // @ts-ignore - process.env is available in Vercel Edge Runtime
+  return typeof process !== 'undefined' ? process.env?.AI_API_KEY : undefined;
 };
 
 interface ChatRequest {
@@ -60,7 +60,7 @@ export default async function handler(req: Request) {
     return new Response('Method not allowed', { status: 405 });
   }
 
-  const apiKey = process.env.AI_API_KEY;
+  const apiKey = getApiKey();
   
   if (!apiKey) {
     return new Response(
